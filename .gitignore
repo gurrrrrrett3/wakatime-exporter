@@ -1,0 +1,6 @@
+.env
+dist
+node_modules
+output.txt
+projects.txt
+data.json
