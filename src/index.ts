@@ -16,6 +16,25 @@ function formatDate(date: Date) {
     return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, "0")}-${date.getDate().toString().padStart(2, "0")}`;
 }
 
+async function gartbin(content: string, language: string = "plaintext", filename?: string, extension: string = "txt") {
+    return await fetch("https://bin.gart.sh/api/v2/bin", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            content,
+            language,
+            filename,
+            extension,
+            expiration: "never"
+        })
+    }).then(res => res.json() as Promise<{
+        success: boolean;
+        id: string;
+    }>).then((data) => data.id);
+}
+
 const now = new Date();
 const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
@@ -34,6 +53,7 @@ fetch(url, {
 }).then(async summary => {
 
     const out: Record<string, number> = {};
+    const projects: string[] = [];
 
     summary.data.forEach(timeRange => {
         timeRange.projects.forEach(project => {
@@ -44,6 +64,10 @@ fetch(url, {
                 out[projectName] += timeSeconds;
             } else {
                 out[projectName] = timeSeconds;
+            }
+
+            if (!projects.includes(projectName)) {
+                projects.push(projectName);
             }
         })
     })
@@ -69,26 +93,22 @@ fetch(url, {
 
     outString.push(`\n${"Total".padEnd(longestName)} | ${totalHours.toFixed(2)} hours | $${totalCost.toFixed(2)}`);
 
-    const binId = await fetch("https://bin.gart.sh/api/v2/bin", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            content: JSON.stringify(summary, null, 2),
-            language: "json",
-            filename: `wakapi-export-${formatDate(twoWeeksAgo)}-${formatDate(now)}`,
-            extension: "json",
-            expiration: "never"
-        })
-    }).then(res => res.json() as Promise<{
-        success: boolean;
-        id: string;
-    }>).then((data) => data.id);
+    const binId = await gartbin(
+        JSON.stringify(summary, null, 2),
+        "json",
+        `wakapi-export-${formatDate(twoWeeksAgo)}-${formatDate(now)}`,
+        "json"
+    )
 
     outString.push(`\nFull data: https://bin.gart.sh/${binId}`);
-    outString.push(`Generated at ${new Date().toUTCString()} with https://gart.sh/wakapi-exporter`)
+    outString.push(`Generated at ${new Date().toUTCString()} with https://gart.sh/l/wakapi-exporter`)
 
-    writeFileSync("output.txt", outString.join("\n"));
+    const outBinId = await gartbin(outString.join("\n"), "plaintext", "wakapi-export", "txt");
+
+    console.log(`Exported to https://bin.gart.sh/${outBinId}`);
+
+    if (projectList.filter(p => p.length > 0).length === 0) {
+        writeFileSync("projects.txt", projects.join("\n"));
+    }
 
 })
